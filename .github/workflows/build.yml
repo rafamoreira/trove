@@ -15,5 +15,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - run: go build ./...
+      - run: go build -o my-binary ./...
       - run: go test ./...
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trove-${{ github.sha }}
+          path: trove 
