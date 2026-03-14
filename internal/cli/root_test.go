@@ -1,0 +1,167 @@
+package cli_test
+
+import (
+	"bytes"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/rafamoreira/trove/internal/cli"
+)
+
+func TestCLIWorkflowAndJSONContract(t *testing.T) {
+	workspace := t.TempDir()
+	vaultPath := filepath.Join(workspace, "vault")
+	configPath := filepath.Join(workspace, "config", "trove.toml")
+	editorPath := writeEditorScript(t, workspace, "#!/bin/sh\nprintf 'print(\"hello\")\\n' > \"$1\"\n")
+
+	t.Setenv("HOME", workspace)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(workspace, "xdg"))
+	t.Setenv("TROVE_EDITOR", editorPath)
+
+	now := func() time.Time { return time.Date(2026, 3, 14, 15, 9, 26, 0, time.UTC) }
+
+	if _, stderr, err := runCLI(t, now, nil, "--config", configPath, "--vault", vaultPath, "init"); err != nil {
+		t.Fatalf("init error: %v, stderr=%s", err, stderr)
+	}
+
+	if _, stderr, err := runCLI(t, now, nil, "--config", configPath, "--vault", vaultPath, "new", "retry.py", "--desc", "Retry helper", "--tags", "Python,Utils"); err != nil {
+		t.Fatalf("new error: %v, stderr=%s", err, stderr)
+	}
+
+	stdout, stderr, err := runCLI(t, now, nil, "--json", "--config", configPath, "--vault", vaultPath, "show", "python/retry")
+	if err != nil {
+		t.Fatalf("show error: %v, stderr=%s", err, stderr)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := payload["data"]; !ok {
+		t.Fatalf("json payload missing data: %s", stdout)
+	}
+	if _, ok := payload["warnings"]; !ok {
+		t.Fatalf("json payload missing warnings: %s", stdout)
+	}
+
+	data := payload["data"].(map[string]any)
+	snippet := data["snippet"].(map[string]any)
+	if snippet["id"] != "python/retry" {
+		t.Fatalf("snippet id = %v, want python/retry", snippet["id"])
+	}
+	if snippet["path"] != "python/retry.py" {
+		t.Fatalf("snippet path = %v, want python/retry.py", snippet["path"])
+	}
+
+	stdout, stderr, err = runCLI(t, now, nil, "--json", "--config", configPath, "--vault", vaultPath, "search", "HELLO")
+	if err != nil {
+		t.Fatalf("search error: %v, stderr=%s", err, stderr)
+	}
+	if !strings.Contains(stdout, "python/retry") {
+		t.Fatalf("search output missing snippet id: %s", stdout)
+	}
+
+	stdout, stderr, err = runCLI(t, now, nil, "--json", "--config", configPath, "--vault", vaultPath, "config", "--show")
+	if err != nil {
+		t.Fatalf("config show error: %v, stderr=%s", err, stderr)
+	}
+	if !strings.Contains(stdout, "\"sources\"") {
+		t.Fatalf("config output missing sources: %s", stdout)
+	}
+}
+
+func TestCLIWarningsAndNoopEdit(t *testing.T) {
+	workspace := t.TempDir()
+	vaultPath := filepath.Join(workspace, "vault")
+	configPath := filepath.Join(workspace, "trove.toml")
+	editorPath := writeEditorScript(t, workspace, "#!/bin/sh\nif [ ! -s \"$1\" ]; then printf 'echo hi\\n' > \"$1\"; fi\n")
+	noOpEditor := writeEditorScript(t, workspace, "#!/bin/sh\nexit 0\n")
+
+	t.Setenv("HOME", workspace)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(workspace, "xdg"))
+	t.Setenv("TROVE_EDITOR", editorPath)
+
+	now := func() time.Time { return time.Date(2026, 3, 14, 16, 0, 0, 0, time.UTC) }
+
+	if _, stderr, err := runCLI(t, now, nil, "--config", configPath, "--vault", vaultPath, "init"); err != nil {
+		t.Fatalf("init error: %v, stderr=%s", err, stderr)
+	}
+	if _, stderr, err := runCLI(t, now, nil, "--config", configPath, "--vault", vaultPath, "new", "script.sh"); err != nil {
+		t.Fatalf("new error: %v, stderr=%s", err, stderr)
+	}
+
+	t.Setenv("TROVE_EDITOR", noOpEditor)
+	stdout, stderr, err := runCLI(t, now, nil, "--json", "--config", configPath, "--vault", vaultPath, "edit", "shell/script")
+	if err != nil {
+		t.Fatalf("edit error: %v, stderr=%s", err, stderr)
+	}
+	if !strings.Contains(stdout, "\"changed\": false") {
+		t.Fatalf("expected noop edit response, got %s", stdout)
+	}
+
+	if err := os.WriteFile(filepath.Join(vaultPath, "shell", "orphan.toml"), []byte("description = 'oops'\ncreated = 2026-03-14T16:00:00Z\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, err = runCLI(t, now, nil, "--json", "--config", configPath, "--vault", vaultPath, "list")
+	if err != nil {
+		t.Fatalf("list error: %v, stderr=%s", err, stderr)
+	}
+	if !strings.Contains(stdout, "\"code\": \"orphan_metadata\"") {
+		t.Fatalf("expected orphan warning in json, got %s", stdout)
+	}
+}
+
+func TestGitUnavailableWarning(t *testing.T) {
+	workspace := t.TempDir()
+	vaultPath := filepath.Join(workspace, "vault")
+	configPath := filepath.Join(workspace, "trove.toml")
+
+	t.Setenv("HOME", workspace)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(workspace, "xdg"))
+	t.Setenv("PATH", filepath.Join(workspace, "missing"))
+
+	now := func() time.Time { return time.Date(2026, 3, 14, 17, 0, 0, 0, time.UTC) }
+
+	_, stderr, err := runCLI(t, now, nil, "--config", configPath, "--vault", vaultPath, "init")
+	if err != nil {
+		t.Fatalf("init error: %v, stderr=%s", err, stderr)
+	}
+	if !strings.Contains(stderr, "git is not available") {
+		t.Fatalf("expected git warning, got %s", stderr)
+	}
+}
+
+func runCLI(t *testing.T, now func() time.Time, stdin *strings.Reader, args ...string) (string, string, error) {
+	t.Helper()
+	if stdin == nil {
+		stdin = strings.NewReader("")
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := cli.Execute(args, cli.Options{
+		Stdin:  stdin,
+		Stdout: &stdout,
+		Stderr: &stderr,
+		Now:    now,
+	})
+	return stdout.String(), stderr.String(), err
+}
+
+func writeEditorScript(t *testing.T, dir string, body string) string {
+	t.Helper()
+	path := filepath.Join(dir, strings.ReplaceAll(t.Name(), "/", "_")+"_"+randomSuffix(t)+".sh")
+	if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func randomSuffix(t *testing.T) string {
+	t.Helper()
+	return strings.ReplaceAll(time.Now().UTC().Format("150405.000000"), ".", "")
+}
