@@ -68,6 +68,7 @@ func NewRoot(opts Options) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
+	root.CompletionOptions.DisableDescriptions = true
 
 	root.SetIn(opts.Stdin)
 	root.SetOut(opts.Stdout)

@@ -135,6 +135,26 @@ func TestGitUnavailableWarning(t *testing.T) {
 	}
 }
 
+func TestZshCompletionDisablesDescriptions(t *testing.T) {
+	workspace := t.TempDir()
+
+	t.Setenv("HOME", workspace)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(workspace, "xdg"))
+
+	now := func() time.Time { return time.Date(2026, 3, 14, 17, 30, 0, 0, time.UTC) }
+
+	stdout, stderr, err := runCLI(t, now, nil, "completion", "zsh")
+	if err != nil {
+		t.Fatalf("completion zsh error: %v, stderr=%s", err, stderr)
+	}
+	if !strings.Contains(stdout, "__completeNoDesc") {
+		t.Fatalf("expected zsh completion to use __completeNoDesc, got %s", stdout)
+	}
+	if strings.Contains(stdout, "__complete ${words[2,-1]}") {
+		t.Fatalf("expected zsh completion to avoid __complete requests with descriptions, got %s", stdout)
+	}
+}
+
 func runCLI(t *testing.T, now func() time.Time, stdin *strings.Reader, args ...string) (string, string, error) {
 	t.Helper()
 	if stdin == nil {
