@@ -135,7 +135,7 @@ func TestGitUnavailableWarning(t *testing.T) {
 	}
 }
 
-func TestZshCompletionDisablesDescriptions(t *testing.T) {
+func TestZshCompletionUsesDescribedCompaddByDefault(t *testing.T) {
 	workspace := t.TempDir()
 
 	t.Setenv("HOME", workspace)
@@ -147,11 +147,31 @@ func TestZshCompletionDisablesDescriptions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("completion zsh error: %v, stderr=%s", err, stderr)
 	}
+	if !strings.Contains(stdout, "__complete ${words[2,-1]}") {
+		t.Fatalf("expected zsh completion to request described completions, got %s", stdout)
+	}
+	if !strings.Contains(stdout, "__trove_compadd_described_completions") {
+		t.Fatalf("expected zsh completion to use custom compadd helper, got %s", stdout)
+	}
+}
+
+func TestZshCompletionNoDescriptionsFlag(t *testing.T) {
+	workspace := t.TempDir()
+
+	t.Setenv("HOME", workspace)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(workspace, "xdg"))
+
+	now := func() time.Time { return time.Date(2026, 3, 14, 17, 45, 0, 0, time.UTC) }
+
+	stdout, stderr, err := runCLI(t, now, nil, "completion", "zsh", "--no-descriptions")
+	if err != nil {
+		t.Fatalf("completion zsh --no-descriptions error: %v, stderr=%s", err, stderr)
+	}
 	if !strings.Contains(stdout, "__completeNoDesc") {
 		t.Fatalf("expected zsh completion to use __completeNoDesc, got %s", stdout)
 	}
-	if strings.Contains(stdout, "__complete ${words[2,-1]}") {
-		t.Fatalf("expected zsh completion to avoid __complete requests with descriptions, got %s", stdout)
+	if strings.Contains(stdout, "__trove_compadd_described_completions") {
+		t.Fatalf("expected no-description zsh completion to omit custom compadd helper, got %s", stdout)
 	}
 }
 

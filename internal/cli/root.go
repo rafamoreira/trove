@@ -68,7 +68,7 @@ func NewRoot(opts Options) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.CompletionOptions.DisableDescriptions = true
+	root.CompletionOptions.DisableDefaultCmd = true
 
 	root.SetIn(opts.Stdin)
 	root.SetOut(opts.Stdout)
@@ -80,6 +80,7 @@ func NewRoot(opts Options) *cobra.Command {
 	root.AddCommand(newInitCmd(opts))
 	root.AddCommand(newNewCmd(opts))
 	root.AddCommand(newAddCmd(opts))
+	root.AddCommand(newCompletionCmd())
 	root.AddCommand(newEditCmd(opts))
 	root.AddCommand(newShowCmd(opts))
 	root.AddCommand(newListCmd(opts))
