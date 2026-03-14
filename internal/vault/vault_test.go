@@ -40,3 +40,47 @@ func TestResolveSelectorAndListWarnings(t *testing.T) {
 		t.Fatal("expected ambiguous bare selector error")
 	}
 }
+
+func TestNextGeneratedNameUsesTrackedCountAndSkipsExistingName(t *testing.T) {
+	base := t.TempDir()
+	v := New(&config.Config{
+		VaultPath: base,
+		FilePath:  filepath.Join(t.TempDir(), "config.toml"),
+	})
+	v.Now = func() time.Time { return time.Date(2026, 3, 14, 12, 30, 0, 0, time.UTC) }
+
+	names := []struct {
+		language string
+		name     string
+	}{
+		{language: "python", name: "retry"},
+		{language: "go", name: "retry"},
+		{language: "python", name: "trove_3"},
+		{language: "shell", name: "cleanup"},
+		{language: "python", name: "trove_5"},
+	}
+	for _, item := range names {
+		if _, err := v.CreateSnippet(item.language, item.name, []byte("body\n"), "", nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	snippet, warnings, err := v.Resolve("shell/cleanup")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %#v", warnings)
+	}
+	if err := v.DeleteSnippet(snippet); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := v.NextGeneratedName("python")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "trove_6" {
+		t.Fatalf("NextGeneratedName(python) = %q, want trove_6", got)
+	}
+}

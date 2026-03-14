@@ -134,18 +134,34 @@ func newNewCmd(opts Options) *cobra.Command {
 	var tags string
 
 	cmd := &cobra.Command{
-		Use:   "new <name>",
+		Use:   "new [name]",
 		Short: "Create a new snippet",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rt, err := loadRuntime(cmd, opts)
 			if err != nil {
 				return err
 			}
 
-			name, language, err := resolveNameAndLanguage(args[0], lang, true)
-			if err != nil {
-				return err
+			var name string
+			var language string
+			if len(args) == 0 {
+				if strings.TrimSpace(lang) == "" {
+					return fmt.Errorf("name is required unless --lang is set")
+				}
+				language, err = vault.NormalizeLanguage(lang)
+				if err != nil {
+					return err
+				}
+				name, err = rt.vault.NextGeneratedName(language)
+				if err != nil {
+					return err
+				}
+			} else {
+				name, language, err = resolveNameAndLanguage(args[0], lang, true)
+				if err != nil {
+					return err
+				}
 			}
 
 			snippet, err := rt.vault.CreateSnippet(language, name, nil, desc, splitCSV(tags))
@@ -200,9 +216,6 @@ func newAddCmd(opts Options) *cobra.Command {
 			if sourceFile == "" && strings.TrimSpace(lang) == "" {
 				return fmt.Errorf("--lang is required when adding from an editor buffer")
 			}
-			if sourceFile == "" && strings.TrimSpace(name) == "" {
-				return fmt.Errorf("--name is required when adding from an editor buffer")
-			}
 
 			var snippetName string
 			var language string
@@ -227,9 +240,20 @@ func newAddCmd(opts Options) *cobra.Command {
 				return rt.emit(snippetData(snippet), warnings, renderSnippetSummary)
 			}
 
-			snippetName, language, err = resolveNameAndLanguage(name, lang, false)
-			if err != nil {
-				return err
+			if strings.TrimSpace(name) == "" {
+				language, err = vault.NormalizeLanguage(lang)
+				if err != nil {
+					return err
+				}
+				snippetName, err = rt.vault.NextGeneratedName(language)
+				if err != nil {
+					return err
+				}
+			} else {
+				snippetName, language, err = resolveNameAndLanguage(name, lang, false)
+				if err != nil {
+					return err
+				}
 			}
 
 			tempDir, err := os.MkdirTemp("", "trove-add-*")

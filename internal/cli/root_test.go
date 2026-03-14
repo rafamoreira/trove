@@ -115,6 +115,77 @@ func TestCLIWarningsAndNoopEdit(t *testing.T) {
 	}
 }
 
+func TestNewWithLangGeneratesScratchStyleName(t *testing.T) {
+	workspace := t.TempDir()
+	vaultPath := filepath.Join(workspace, "vault")
+	configPath := filepath.Join(workspace, "trove.toml")
+	editorPath := writeEditorScript(t, workspace, "#!/bin/sh\nprintf 'print(\"hello\")\\n' > \"$1\"\n")
+
+	t.Setenv("HOME", workspace)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(workspace, "xdg"))
+	t.Setenv("TROVE_EDITOR", editorPath)
+
+	now := func() time.Time { return time.Date(2026, 3, 14, 18, 0, 0, 0, time.UTC) }
+
+	if _, stderr, err := runCLI(t, now, nil, "--config", configPath, "--vault", vaultPath, "init"); err != nil {
+		t.Fatalf("init error: %v, stderr=%s", err, stderr)
+	}
+
+	stdout, stderr, err := runCLI(t, now, nil, "--config", configPath, "--vault", vaultPath, "new", "--lang", "python")
+	if err != nil {
+		t.Fatalf("new --lang error: %v, stderr=%s", err, stderr)
+	}
+	if !strings.Contains(stdout, "python/trove_1") {
+		t.Fatalf("expected generated snippet id, got %s", stdout)
+	}
+	if !strings.Contains(stdout, "python/trove_1.py") {
+		t.Fatalf("expected generated snippet path, got %s", stdout)
+	}
+
+	if _, stderr, err := runCLI(t, now, nil, "--config", configPath, "--vault", vaultPath, "new", "script.sh"); err != nil {
+		t.Fatalf("named new error: %v, stderr=%s", err, stderr)
+	}
+
+	stdout, stderr, err = runCLI(t, now, nil, "--config", configPath, "--vault", vaultPath, "new", "--lang", "python")
+	if err != nil {
+		t.Fatalf("second new --lang error: %v, stderr=%s", err, stderr)
+	}
+	if !strings.Contains(stdout, "python/trove_3") {
+		t.Fatalf("expected generated snippet to use tracked count, got %s", stdout)
+	}
+	if !strings.Contains(stdout, "python/trove_3.py") {
+		t.Fatalf("expected generated snippet path, got %s", stdout)
+	}
+}
+
+func TestAddWithLangFromEditorBufferGeneratesScratchStyleName(t *testing.T) {
+	workspace := t.TempDir()
+	vaultPath := filepath.Join(workspace, "vault")
+	configPath := filepath.Join(workspace, "trove.toml")
+	editorPath := writeEditorScript(t, workspace, "#!/bin/sh\nprintf 'print(\"hello\")\\n' > \"$1\"\n")
+
+	t.Setenv("HOME", workspace)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(workspace, "xdg"))
+	t.Setenv("TROVE_EDITOR", editorPath)
+
+	now := func() time.Time { return time.Date(2026, 3, 14, 18, 15, 0, 0, time.UTC) }
+
+	if _, stderr, err := runCLI(t, now, nil, "--config", configPath, "--vault", vaultPath, "init"); err != nil {
+		t.Fatalf("init error: %v, stderr=%s", err, stderr)
+	}
+
+	stdout, stderr, err := runCLI(t, now, nil, "--config", configPath, "--vault", vaultPath, "add", "--lang", "python")
+	if err != nil {
+		t.Fatalf("add --lang error: %v, stderr=%s", err, stderr)
+	}
+	if !strings.Contains(stdout, "python/trove_1") {
+		t.Fatalf("expected generated snippet id, got %s", stdout)
+	}
+	if !strings.Contains(stdout, "python/trove_1.py") {
+		t.Fatalf("expected generated snippet path, got %s", stdout)
+	}
+}
+
 func TestGitUnavailableWarning(t *testing.T) {
 	workspace := t.TempDir()
 	vaultPath := filepath.Join(workspace, "vault")

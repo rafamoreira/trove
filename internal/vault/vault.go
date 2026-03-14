@@ -147,6 +147,33 @@ func (v *Vault) CreateSnippet(language string, name string, body []byte, descrip
 	return snippet, nil
 }
 
+func (v *Vault) NextGeneratedName(language string) (string, error) {
+	lang, err := NormalizeLanguage(language)
+	if err != nil {
+		return "", err
+	}
+
+	snippets, _, err := v.List(ListOptions{})
+	if err != nil {
+		return "", err
+	}
+
+	next := len(snippets) + 1
+	for {
+		name := fmt.Sprintf("trove_%d", next)
+		codePath, err := v.CodePath(lang, name)
+		if err != nil {
+			return "", err
+		}
+		if _, err := os.Stat(codePath); os.IsNotExist(err) {
+			return name, nil
+		} else if err != nil {
+			return "", err
+		}
+		next++
+	}
+}
+
 func (v *Vault) DeleteSnippet(snippet *Snippet) error {
 	if err := os.Remove(snippet.Path); err != nil && !os.IsNotExist(err) {
 		return err
