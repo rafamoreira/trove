@@ -72,6 +72,11 @@ func TestSyncPushesEvenWhenNothingNewToCommit(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Force initial branch to "main" regardless of the system default.
+	if _, err := v.git("symbolic-ref", "HEAD", "refs/heads/main"); err != nil {
+		t.Fatal(err)
+	}
+
 	// Configure git identity so commits work in a clean environment.
 	for _, kv := range [][2]string{
 		{"user.email", "test@example.com"},
