@@ -88,6 +88,7 @@ func NewRoot(opts Options) *cobra.Command {
 	root.AddCommand(newSearchCmd(opts))
 	root.AddCommand(newRmCmd(opts))
 	root.AddCommand(newSyncCmd(opts))
+	root.AddCommand(newWatchCmd(opts))
 	root.AddCommand(newStatusCmd(opts))
 	root.AddCommand(newConfigCmd(opts))
 
