@@ -336,38 +336,41 @@ func (v *Vault) UpdateSnippet(snippet *Snippet, description *string, tags *[]str
 	return snippet.SaveMeta()
 }
 
-func (v *Vault) SyncNow() (bool, []diag.Warning, error) {
+func (v *Vault) SyncNow() (bool, bool, []diag.Warning, error) {
 	if !GitAvailable() {
-		return false, []diag.Warning{{
+		return false, false, []diag.Warning{{
 			Code:    "git_unavailable",
 			Message: "git is not available; trove will work locally without sync features",
 		}}, nil
 	}
 	if !v.GitIsRepo() {
-		return false, []diag.Warning{{
+		return false, false, []diag.Warning{{
 			Code:    "git_unavailable",
 			Message: "vault is not a git repository; trove will work locally without sync features",
 		}}, nil
 	}
 
 	if err := v.GitAddAll(); err != nil {
-		return false, nil, err
+		return false, false, nil, err
 	}
 	committed, err := v.GitCommit("sync " + v.Now().UTC().Format(time.RFC3339))
 	if err != nil {
-		return false, nil, err
+		return false, false, nil, err
 	}
 
 	var warnings []diag.Warning
-	if committed && v.Config.AutoPush && strings.TrimSpace(v.Config.GitRemote) != "" {
+	pushed := false
+	if v.Config.AutoPush && strings.TrimSpace(v.Config.GitRemote) != "" {
 		if err := v.GitPush(v.Config.GitRemote, v.Config.GitBranch); err != nil {
 			warnings = append(warnings, diag.Warning{
 				Code:    "git_push_failed",
 				Message: err.Error(),
 			})
+		} else {
+			pushed = true
 		}
 	}
-	return committed, warnings, nil
+	return committed, pushed, warnings, nil
 }
 
 func (v *Vault) CommitSnippet(message string, paths ...string) []diag.Warning {

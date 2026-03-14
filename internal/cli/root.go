@@ -521,13 +521,13 @@ func newSyncCmd(opts Options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			committed, warnings, err := rt.vault.SyncNow()
+			committed, pushed, warnings, err := rt.vault.SyncNow()
 			if err != nil {
 				return err
 			}
 			return rt.emit(map[string]any{
 				"committed": committed,
-				"pushed":    committed && rt.cfg.AutoPush && strings.TrimSpace(rt.cfg.GitRemote) != "",
+				"pushed":    pushed,
 			}, warnings, renderMap)
 		},
 	}
