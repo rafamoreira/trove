@@ -80,6 +80,7 @@ func NewRoot(opts Options) *cobra.Command {
 	root.AddCommand(newInitCmd(opts))
 	root.AddCommand(newNewCmd(opts))
 	root.AddCommand(newAddCmd(opts))
+	root.AddCommand(newCdCmd(opts))
 	root.AddCommand(newCompletionCmd())
 	root.AddCommand(newEditCmd(opts))
 	root.AddCommand(newShowCmd(opts))

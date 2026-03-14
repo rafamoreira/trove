@@ -186,6 +186,66 @@ func TestAddWithLangFromEditorBufferGeneratesScratchStyleName(t *testing.T) {
 	}
 }
 
+func TestCdLaunchesShellInVault(t *testing.T) {
+	workspace := t.TempDir()
+	vaultPath := filepath.Join(workspace, "vault")
+	configPath := filepath.Join(workspace, "trove.toml")
+	shellPath := writeEditorScript(t, workspace, "#!/bin/sh\npwd\n")
+
+	if err := os.MkdirAll(vaultPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("HOME", workspace)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(workspace, "xdg"))
+	t.Setenv("SHELL", shellPath)
+
+	now := func() time.Time { return time.Date(2026, 3, 14, 18, 30, 0, 0, time.UTC) }
+
+	stdout, stderr, err := runCLI(t, now, nil, "--config", configPath, "--vault", vaultPath, "cd")
+	if err != nil {
+		t.Fatalf("cd error: %v, stderr=%s", err, stderr)
+	}
+
+	got, err := filepath.EvalSymlinks(strings.TrimSpace(stdout))
+	if err != nil {
+		t.Fatalf("eval symlinks(stdout): %v", err)
+	}
+	want, err := filepath.EvalSymlinks(vaultPath)
+	if err != nil {
+		t.Fatalf("eval symlinks(vaultPath): %v", err)
+	}
+	if got != want {
+		t.Fatalf("cd launched in %q, want %q", got, want)
+	}
+}
+
+func TestCdJSONReturnsVaultPath(t *testing.T) {
+	workspace := t.TempDir()
+	vaultPath := filepath.Join(workspace, "vault")
+	configPath := filepath.Join(workspace, "trove.toml")
+
+	t.Setenv("HOME", workspace)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(workspace, "xdg"))
+
+	now := func() time.Time { return time.Date(2026, 3, 14, 18, 45, 0, 0, time.UTC) }
+
+	stdout, stderr, err := runCLI(t, now, nil, "--json", "--config", configPath, "--vault", vaultPath, "cd")
+	if err != nil {
+		t.Fatalf("cd --json error: %v, stderr=%s", err, stderr)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatal(err)
+	}
+
+	data := payload["data"].(map[string]any)
+	if data["vault_path"] != vaultPath {
+		t.Fatalf("vault path = %v, want %s", data["vault_path"], vaultPath)
+	}
+}
+
 func TestGitUnavailableWarning(t *testing.T) {
 	workspace := t.TempDir()
 	vaultPath := filepath.Join(workspace, "vault")
