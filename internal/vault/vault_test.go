@@ -50,9 +50,15 @@ func TestSyncPushesEvenWhenNothingNewToCommit(t *testing.T) {
 
 	// Create a bare repo to act as the remote.
 	remoteDir := t.TempDir()
-	cmd := exec.Command("git", "init", "--bare", filepath.Join(remoteDir, "remote.git"))
+	remotePath := filepath.Join(remoteDir, "remote.git")
+	cmd := exec.Command("git", "init", "--bare", remotePath)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git init --bare: %v\n%s", err, out)
+	}
+	// Force the bare remote's HEAD to "main" so git log works after we push.
+	cmd = exec.Command("git", "--git-dir="+remotePath, "symbolic-ref", "HEAD", "refs/heads/main")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("set remote HEAD: %v\n%s", err, out)
 	}
 	remoteURL := "file://" + filepath.Join(remoteDir, "remote.git")
 
