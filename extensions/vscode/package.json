@@ -1,0 +1,238 @@
+{
+  "name": "trove",
+  "displayName": "Trove Snippet Vault",
+  "description": "Browse, create, edit, and insert Trove snippets from VS Code",
+  "version": "0.1.0",
+  "publisher": "trove",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rafamoreira/trove"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Snippets",
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "trove",
+          "title": "Trove",
+          "icon": "$(archive)"
+        }
+      ]
+    },
+    "views": {
+      "trove": [
+        {
+          "id": "troveSnippets",
+          "name": "Snippets"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "trove.newSnippet",
+        "title": "Trove: New Snippet",
+        "icon": "$(add)"
+      },
+      {
+        "command": "trove.newSnippetFromSelection",
+        "title": "Trove: Save Selection as Snippet"
+      },
+      {
+        "command": "trove.addFile",
+        "title": "Trove: Add Current File as Snippet"
+      },
+      {
+        "command": "trove.editSnippet",
+        "title": "Trove: Edit Snippet",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "trove.editSnippetMeta",
+        "title": "Trove: Edit Snippet Metadata"
+      },
+      {
+        "command": "trove.deleteSnippet",
+        "title": "Trove: Delete Snippet",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "trove.showSnippet",
+        "title": "Trove: Show Snippet"
+      },
+      {
+        "command": "trove.insertSnippet",
+        "title": "Trove: Insert Snippet",
+        "icon": "$(insert)"
+      },
+      {
+        "command": "trove.searchSnippets",
+        "title": "Trove: Search Snippets"
+      },
+      {
+        "command": "trove.syncVault",
+        "title": "Trove: Sync Vault",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "trove.refreshTree",
+        "title": "Trove: Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "trove.copySnippet",
+        "title": "Trove: Copy Snippet to Clipboard",
+        "icon": "$(clippy)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "trove.newSnippet",
+          "when": "view == troveSnippets",
+          "group": "navigation"
+        },
+        {
+          "command": "trove.syncVault",
+          "when": "view == troveSnippets",
+          "group": "navigation"
+        },
+        {
+          "command": "trove.refreshTree",
+          "when": "view == troveSnippets",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "trove.insertSnippet",
+          "when": "view == troveSnippets && viewItem == snippet",
+          "group": "inline@1"
+        },
+        {
+          "command": "trove.copySnippet",
+          "when": "view == troveSnippets && viewItem == snippet",
+          "group": "inline@2"
+        },
+        {
+          "command": "trove.deleteSnippet",
+          "when": "view == troveSnippets && viewItem == snippet",
+          "group": "inline@3"
+        },
+        {
+          "command": "trove.editSnippet",
+          "when": "view == troveSnippets && viewItem == snippet",
+          "group": "1_edit@1"
+        },
+        {
+          "command": "trove.editSnippetMeta",
+          "when": "view == troveSnippets && viewItem == snippet",
+          "group": "1_edit@2"
+        },
+        {
+          "command": "trove.showSnippet",
+          "when": "view == troveSnippets && viewItem == snippet",
+          "group": "2_open@1"
+        },
+        {
+          "command": "trove.insertSnippet",
+          "when": "view == troveSnippets && viewItem == snippet",
+          "group": "2_open@2"
+        },
+        {
+          "command": "trove.copySnippet",
+          "when": "view == troveSnippets && viewItem == snippet",
+          "group": "2_open@3"
+        },
+        {
+          "command": "trove.deleteSnippet",
+          "when": "view == troveSnippets && viewItem == snippet",
+          "group": "3_delete"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "trove.newSnippetFromSelection",
+          "when": "editorHasSelection",
+          "group": "trove@1"
+        },
+        {
+          "command": "trove.insertSnippet",
+          "group": "trove@2"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "trove.searchSnippets",
+        "key": "ctrl+shift+t",
+        "mac": "cmd+shift+t"
+      }
+    ],
+    "configuration": {
+      "title": "Trove",
+      "properties": {
+        "trove.cliPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to trove binary (empty = PATH lookup)"
+        },
+        "trove.vaultPath": {
+          "type": "string",
+          "default": "",
+          "description": "Override vault path (empty = CLI default)"
+        },
+        "trove.defaultLanguage": {
+          "type": "string",
+          "default": "",
+          "description": "Default language for new snippets"
+        },
+        "trove.showNotifications": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show success notifications"
+        },
+        "trove.syncOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Auto-sync when a vault file is saved"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "watch": "pnpm run build --watch",
+    "lint": "eslint src --ext ts",
+    "test": "tsc -p tsconfig.json && node out/test/runTest.js",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/glob": "^9.0.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "^2.3.8",
+    "@vscode/vsce": "^2.22.0",
+    "esbuild": "^0.19.0",
+    "eslint": "^8.56.0",
+    "glob": "^13.0.6",
+    "mocha": "^11.7.5",
+    "typescript": "^5.3.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "@vscode/vsce-sign",
+      "keytar"
+    ]
+  }
+}

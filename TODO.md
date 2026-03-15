@@ -1,5 +1,8 @@
 # TODO
 
-- [ ] VSCode plugin
+- [x] VSCode plugin
+- [ ] neovim plugin
+- [ ] intellij plugin
+- [ ] github actions
 ## Backlog
 

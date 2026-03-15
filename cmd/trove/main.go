@@ -7,6 +7,8 @@ import (
 	"github.com/rafamoreira/trove/internal/cli"
 )
 
+var version = "dev"
+
 func main() {
 	if err := cli.Execute(os.Args[1:], cli.Options{
 		Stdin:  os.Stdin,
