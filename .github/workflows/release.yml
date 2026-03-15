@@ -74,6 +74,8 @@ jobs:
         with:
           generate_release_notes: true
           files: |
-            artifacts/trove-*
+            artifacts/trove-linux-*
+            artifacts/trove-darwin-*
+            artifacts/trove-windows-*
             artifacts/*.vsix
             artifacts/checksums.txt
