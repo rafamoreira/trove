@@ -221,10 +221,9 @@ func (v *Vault) List(opts ListOptions) ([]*Snippet, []diag.Warning, error) {
 			if _, err := os.Stat(base); err == nil {
 				return nil
 			}
-			for _, ext := range languageExtensions {
-				if ext == "" {
-					continue
-				}
+			// Check extensions for the language indicated by the parent directory
+			langDir := filepath.Base(filepath.Dir(path))
+			for _, ext := range LanguageExtensions(langDir) {
 				if _, err := os.Stat(base + ext); err == nil {
 					return nil
 				}
