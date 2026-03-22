@@ -33,6 +33,9 @@ func NormalizeLanguage(input string) (string, error) {
 	if value == "plaintext" || value == "text" || value == "txt" {
 		return "plaintext", nil
 	}
+	if value == "prompt" {
+		return "prompt", nil
+	}
 
 	// Try alias lookup (handles "js"→"JavaScript", "go"→"Go", etc.)
 	if lang, ok := enry.GetLanguageByAlias(value); ok {
@@ -58,6 +61,10 @@ func DetectLanguageFromPath(path string) (string, bool) {
 	ext := strings.ToLower(filepath.Ext(path))
 	if ext == "" {
 		return "", false
+	}
+
+	if ext == ".prompt" {
+		return "prompt", true
 	}
 
 	// Check disambiguations first for known ambiguous extensions
@@ -88,6 +95,9 @@ func CanonicalExtension(language string) (string, error) {
 	if lang == "plaintext" {
 		return "", nil
 	}
+	if lang == "prompt" {
+		return ".prompt", nil
+	}
 
 	// enry needs title-case canonical names; resolve via alias lookup
 	canonical, ok := enry.GetLanguageByAlias(lang)
@@ -103,6 +113,9 @@ func CanonicalExtension(language string) (string, error) {
 // LanguageExtensions returns the known file extensions for a language.
 // The language should be a normalized lowercase name.
 func LanguageExtensions(language string) []string {
+	if language == "prompt" {
+		return []string{".prompt"}
+	}
 	if canonical, ok := enry.GetLanguageByAlias(language); ok {
 		return enry.GetLanguageExtensions(canonical)
 	}

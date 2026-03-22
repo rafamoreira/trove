@@ -135,6 +135,45 @@ func TestSyncPushesEvenWhenNothingNewToCommit(t *testing.T) {
 	}
 }
 
+func TestCreateAndResolvePromptSnippet(t *testing.T) {
+	base := t.TempDir()
+	v := New(&config.Config{
+		VaultPath: base,
+		FilePath:  filepath.Join(t.TempDir(), "config.toml"),
+	})
+	v.Now = func() time.Time { return time.Date(2026, 3, 14, 12, 0, 0, 0, time.UTC) }
+
+	body := []byte("Create a new Python web app using FastAPI with...\n")
+	snippet, err := v.CreateSnippet("prompt", "new_python_app", body, "scaffold a python app", []string{"python", "scaffold"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify file is stored with .prompt extension
+	expectedPath := filepath.Join(base, "prompt", "new_python_app.prompt")
+	if snippet.Path != expectedPath {
+		t.Fatalf("snippet.Path = %q, want %q", snippet.Path, expectedPath)
+	}
+	if _, err := os.Stat(expectedPath); err != nil {
+		t.Fatalf("prompt file does not exist: %v", err)
+	}
+
+	// Verify we can resolve it back
+	resolved, warnings, err := v.Resolve("prompt/new_python_app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %v", warnings)
+	}
+	if resolved.Language != "prompt" {
+		t.Fatalf("resolved.Language = %q, want prompt", resolved.Language)
+	}
+	if resolved.Name != "new_python_app" {
+		t.Fatalf("resolved.Name = %q, want new_python_app", resolved.Name)
+	}
+}
+
 func TestNextGeneratedNameUsesTrackedCountAndSkipsExistingName(t *testing.T) {
 	base := t.TempDir()
 	v := New(&config.Config{

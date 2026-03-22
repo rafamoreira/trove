@@ -123,6 +123,36 @@ func TestDetectLanguageFromPath(t *testing.T) {
 	}
 }
 
+func TestNormalizeLanguagePrompt(t *testing.T) {
+	got, err := NormalizeLanguage("prompt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "prompt" {
+		t.Fatalf("NormalizeLanguage(prompt) = %q, want prompt", got)
+	}
+}
+
+func TestCanonicalExtensionPrompt(t *testing.T) {
+	got, err := CanonicalExtension("prompt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != ".prompt" {
+		t.Fatalf("CanonicalExtension(prompt) = %q, want .prompt", got)
+	}
+}
+
+func TestDetectLanguageFromPathPrompt(t *testing.T) {
+	got, ok := DetectLanguageFromPath("new_python_app.prompt")
+	if !ok {
+		t.Fatal("DetectLanguageFromPath(new_python_app.prompt) not found")
+	}
+	if got != "prompt" {
+		t.Fatalf("DetectLanguageFromPath(new_python_app.prompt) = %q, want prompt", got)
+	}
+}
+
 func TestNormalizeName(t *testing.T) {
 	got, err := NormalizeName("Retry Decorator!")
 	if err != nil {
