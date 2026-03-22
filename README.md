@@ -87,4 +87,4 @@ trove completion bash   # or zsh, fish, powershell
 
 ## Supported languages
 
-`go`, `javascript`/`js`, `typescript`/`ts`, `python`/`py`, `ruby`/`rb`, `rust`/`rs`, `shell`/`bash`/`sh`, `sql`, `lua`, `plaintext`
+Trove uses [go-enry](https://github.com/go-enry/go-enry) (a Go port of GitHub's [Linguist](https://github.com/github/linguist)) for language detection. Any language recognized by Linguist is supported — including aliases (e.g., `js` for JavaScript, `rs` for Rust) and file extension inference (e.g., `.py` → Python).
