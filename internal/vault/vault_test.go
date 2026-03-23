@@ -321,6 +321,44 @@ func TestListFilterByPublic(t *testing.T) {
 	}
 }
 
+func TestListIgnoresSiteDirectory(t *testing.T) {
+	base := t.TempDir()
+	v := New(&config.Config{
+		VaultPath: base,
+		FilePath:  filepath.Join(t.TempDir(), "config.toml"),
+	})
+	v.Now = func() time.Time { return time.Date(2026, 3, 14, 12, 0, 0, 0, time.UTC) }
+
+	if _, err := v.CreateSnippet("go", "hello", []byte("package main\n"), "hello", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// Simulate a _site directory with HTML files.
+	siteDir := filepath.Join(base, "_site")
+	if err := os.MkdirAll(filepath.Join(siteDir, "go"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(siteDir, "index.html"), []byte("<html></html>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(siteDir, "go", "hello.html"), []byte("<html></html>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	items, warnings, err := v.List(ListOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 snippet, got %d", len(items))
+	}
+	for _, w := range warnings {
+		if strings.Contains(w.Path, "_site") {
+			t.Fatalf("unexpected warning about _site: %v", w)
+		}
+	}
+}
+
 func TestNextGeneratedNameUsesTrackedCountAndSkipsExistingName(t *testing.T) {
 	base := t.TempDir()
 	v := New(&config.Config{

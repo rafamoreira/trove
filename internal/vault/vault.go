@@ -203,6 +203,9 @@ func (v *Vault) List(opts ListOptions) ([]*Snippet, []diag.Warning, error) {
 			return err
 		}
 		if d.IsDir() {
+			if d.Name() == "_site" {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		if path == filepath.Join(v.Path, ".gitignore") || path == filepath.Join(v.Path, "README.md") {
