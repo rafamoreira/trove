@@ -48,7 +48,7 @@ func (v *Vault) Init(remote string) ([]diag.Warning, error) {
 		return nil, err
 	}
 
-	if err := os.WriteFile(filepath.Join(v.Path, ".gitignore"), []byte(".DS_Store\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(v.Path, ".gitignore"), []byte(".DS_Store\n_site/\n"), 0o644); err != nil {
 		return nil, err
 	}
 	if err := os.WriteFile(filepath.Join(v.Path, "README.md"), []byte("# Trove Vault\n"), 0o644); err != nil {
