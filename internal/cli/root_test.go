@@ -306,6 +306,177 @@ func TestZshCompletionNoDescriptionsFlag(t *testing.T) {
 	}
 }
 
+func TestEditPublicFlag(t *testing.T) {
+	workspace := t.TempDir()
+	vaultPath := filepath.Join(workspace, "vault")
+	configPath := filepath.Join(workspace, "trove.toml")
+	editorPath := writeEditorScript(t, workspace, "#!/bin/sh\nif [ ! -s \"$1\" ]; then printf 'echo hi\\n' > \"$1\"; fi\n")
+
+	t.Setenv("HOME", workspace)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(workspace, "xdg"))
+	t.Setenv("TROVE_EDITOR", editorPath)
+
+	now := func() time.Time { return time.Date(2026, 3, 14, 19, 0, 0, 0, time.UTC) }
+
+	if _, stderr, err := runCLI(t, now, nil, "--config", configPath, "--vault", vaultPath, "init"); err != nil {
+		t.Fatalf("init error: %v, stderr=%s", err, stderr)
+	}
+	if _, stderr, err := runCLI(t, now, nil, "--config", configPath, "--vault", vaultPath, "new", "script.sh"); err != nil {
+		t.Fatalf("new error: %v, stderr=%s", err, stderr)
+	}
+
+	// Mark as public via edit --public.
+	if _, stderr, err := runCLI(t, now, nil, "--config", configPath, "--vault", vaultPath, "edit", "shell/script", "--public"); err != nil {
+		t.Fatalf("edit --public error: %v, stderr=%s", err, stderr)
+	}
+
+	// Verify the sidecar now contains public = true.
+	tomlBytes, err := os.ReadFile(filepath.Join(vaultPath, "shell", "script.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(tomlBytes), "public = true") {
+		t.Fatalf("expected public = true in sidecar, got:\n%s", string(tomlBytes))
+	}
+
+	// Verify JSON output includes public field.
+	stdout, stderr, err := runCLI(t, now, nil, "--json", "--config", configPath, "--vault", vaultPath, "show", "shell/script")
+	if err != nil {
+		t.Fatalf("show error: %v, stderr=%s", err, stderr)
+	}
+	if !strings.Contains(stdout, "\"public\": true") {
+		t.Fatalf("expected public: true in JSON output, got:\n%s", stdout)
+	}
+}
+
+func TestNewAndAddWithPublicFlag(t *testing.T) {
+	workspace := t.TempDir()
+	vaultPath := filepath.Join(workspace, "vault")
+	configPath := filepath.Join(workspace, "trove.toml")
+	editorPath := writeEditorScript(t, workspace, "#!/bin/sh\nprintf 'echo hello\\n' > \"$1\"\n")
+
+	t.Setenv("HOME", workspace)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(workspace, "xdg"))
+	t.Setenv("TROVE_EDITOR", editorPath)
+
+	now := func() time.Time { return time.Date(2026, 3, 14, 19, 15, 0, 0, time.UTC) }
+
+	if _, stderr, err := runCLI(t, now, nil, "--config", configPath, "--vault", vaultPath, "init"); err != nil {
+		t.Fatalf("init error: %v, stderr=%s", err, stderr)
+	}
+
+	// new --public
+	if _, stderr, err := runCLI(t, now, nil, "--config", configPath, "--vault", vaultPath, "new", "pub.sh", "--public"); err != nil {
+		t.Fatalf("new --public error: %v, stderr=%s", err, stderr)
+	}
+	tomlBytes, err := os.ReadFile(filepath.Join(vaultPath, "shell", "pub.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(tomlBytes), "public = true") {
+		t.Fatalf("expected public = true after new --public, got:\n%s", string(tomlBytes))
+	}
+
+	// add --public with file
+	srcFile := filepath.Join(workspace, "source.py")
+	if err := os.WriteFile(srcFile, []byte("print('hi')\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, stderr, err := runCLI(t, now, nil, "--config", configPath, "--vault", vaultPath, "add", srcFile, "--public"); err != nil {
+		t.Fatalf("add --public error: %v, stderr=%s", err, stderr)
+	}
+	tomlBytes, err = os.ReadFile(filepath.Join(vaultPath, "python", "source.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(tomlBytes), "public = true") {
+		t.Fatalf("expected public = true after add --public, got:\n%s", string(tomlBytes))
+	}
+}
+
+func TestPublishCommand(t *testing.T) {
+	workspace := t.TempDir()
+	vaultPath := filepath.Join(workspace, "vault")
+	configPath := filepath.Join(workspace, "trove.toml")
+	outputDir := filepath.Join(workspace, "site")
+	editorPath := writeEditorScript(t, workspace, "#!/bin/sh\nprintf 'echo hello\\n' > \"$1\"\n")
+
+	t.Setenv("HOME", workspace)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(workspace, "xdg"))
+	t.Setenv("TROVE_EDITOR", editorPath)
+
+	now := func() time.Time { return time.Date(2026, 3, 14, 19, 30, 0, 0, time.UTC) }
+
+	if _, stderr, err := runCLI(t, now, nil, "--config", configPath, "--vault", vaultPath, "init"); err != nil {
+		t.Fatalf("init error: %v, stderr=%s", err, stderr)
+	}
+
+	// Create a public snippet and a private one.
+	if _, stderr, err := runCLI(t, now, nil, "--config", configPath, "--vault", vaultPath, "new", "pub.sh", "--public"); err != nil {
+		t.Fatalf("new --public error: %v, stderr=%s", err, stderr)
+	}
+	if _, stderr, err := runCLI(t, now, nil, "--config", configPath, "--vault", vaultPath, "new", "priv.sh"); err != nil {
+		t.Fatalf("new error: %v, stderr=%s", err, stderr)
+	}
+
+	// Publish.
+	stdout, stderr, err := runCLI(t, now, nil, "--json", "--config", configPath, "--vault", vaultPath, "publish", "--output", outputDir)
+	if err != nil {
+		t.Fatalf("publish error: %v, stderr=%s", err, stderr)
+	}
+
+	// Verify JSON output.
+	if !strings.Contains(stdout, "\"snippet_count\": 1") {
+		t.Fatalf("expected 1 public snippet in output, got:\n%s", stdout)
+	}
+
+	// Verify HTML files.
+	if _, err := os.Stat(filepath.Join(outputDir, "index.html")); err != nil {
+		t.Fatalf("index.html not created: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(outputDir, "shell", "pub.html")); err != nil {
+		t.Fatalf("pub.html not created: %v", err)
+	}
+	// Private snippet should NOT have a page.
+	if _, err := os.Stat(filepath.Join(outputDir, "shell", "priv.html")); err == nil {
+		t.Fatal("priv.html should not exist for private snippet")
+	}
+}
+
+func TestPublishNoPublicSnippets(t *testing.T) {
+	workspace := t.TempDir()
+	vaultPath := filepath.Join(workspace, "vault")
+	configPath := filepath.Join(workspace, "trove.toml")
+	outputDir := filepath.Join(workspace, "site")
+	editorPath := writeEditorScript(t, workspace, "#!/bin/sh\nprintf 'echo hello\\n' > \"$1\"\n")
+
+	t.Setenv("HOME", workspace)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(workspace, "xdg"))
+	t.Setenv("TROVE_EDITOR", editorPath)
+
+	now := func() time.Time { return time.Date(2026, 3, 14, 19, 45, 0, 0, time.UTC) }
+
+	if _, stderr, err := runCLI(t, now, nil, "--config", configPath, "--vault", vaultPath, "init"); err != nil {
+		t.Fatalf("init error: %v, stderr=%s", err, stderr)
+	}
+	if _, stderr, err := runCLI(t, now, nil, "--config", configPath, "--vault", vaultPath, "new", "priv.sh"); err != nil {
+		t.Fatalf("new error: %v, stderr=%s", err, stderr)
+	}
+
+	stdout, stderr, err := runCLI(t, now, nil, "--json", "--config", configPath, "--vault", vaultPath, "publish", "--output", outputDir)
+	if err != nil {
+		t.Fatalf("publish error: %v, stderr=%s", err, stderr)
+	}
+	if !strings.Contains(stdout, "\"snippet_count\": 0") {
+		t.Fatalf("expected 0 snippets, got:\n%s", stdout)
+	}
+
+	// Index should still be created.
+	if _, err := os.Stat(filepath.Join(outputDir, "index.html")); err != nil {
+		t.Fatalf("index.html not created: %v", err)
+	}
+}
+
 func runCLI(t *testing.T, now func() time.Time, stdin *strings.Reader, args ...string) (string, string, error) {
 	t.Helper()
 	if stdin == nil {

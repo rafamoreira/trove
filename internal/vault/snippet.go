@@ -20,12 +20,14 @@ type Snippet struct {
 	MetaPath    string    `json:"meta_path"`
 	Description string    `json:"description"`
 	Tags        []string  `json:"tags"`
+	Public      bool      `json:"public"`
 	Created     time.Time `json:"created"`
 }
 
 type sidecar struct {
 	Description string    `toml:"description"`
 	Tags        []string  `toml:"tags"`
+	Public      bool      `toml:"public"`
 	Created     time.Time `toml:"created"`
 }
 
@@ -41,6 +43,7 @@ func (s *Snippet) SaveMeta() error {
 	meta := sidecar{
 		Description: s.Description,
 		Tags:        append([]string(nil), s.Tags...),
+		Public:      s.Public,
 		Created:     s.Created.UTC(),
 	}
 
@@ -86,6 +89,7 @@ func LoadSnippet(vaultPath string, codePath string) (*Snippet, error) {
 		MetaPath:    metaPath,
 		Description: meta.Description,
 		Tags:        append([]string(nil), meta.Tags...),
+		Public:      meta.Public,
 		Created:     meta.Created.UTC(),
 	}, nil
 }

@@ -174,6 +174,153 @@ func TestCreateAndResolvePromptSnippet(t *testing.T) {
 	}
 }
 
+func TestPublicFieldRoundTrip(t *testing.T) {
+	base := t.TempDir()
+	v := New(&config.Config{
+		VaultPath: base,
+		FilePath:  filepath.Join(t.TempDir(), "config.toml"),
+	})
+	v.Now = func() time.Time { return time.Date(2026, 3, 14, 12, 0, 0, 0, time.UTC) }
+
+	snippet, err := v.CreateSnippet("go", "hello", []byte("package main\n"), "hello", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Default should be false.
+	if snippet.Public {
+		t.Fatal("expected Public to default to false")
+	}
+
+	// Set public, save, and reload.
+	snippet.Public = true
+	if err := snippet.SaveMeta(); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded, err := LoadSnippet(base, snippet.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !loaded.Public {
+		t.Fatal("expected Public to be true after round-trip")
+	}
+}
+
+func TestPublicFieldDefaultsFalseForExistingSidecar(t *testing.T) {
+	base := t.TempDir()
+	langDir := filepath.Join(base, "go")
+	if err := os.MkdirAll(langDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Write a sidecar without the public field (simulates pre-existing snippet).
+	if err := os.WriteFile(filepath.Join(langDir, "old.toml"), []byte("description = 'old snippet'\ncreated = 2026-03-14T12:00:00Z\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(langDir, "old.go"), []byte("package old\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	snippet, err := LoadSnippet(base, filepath.Join(langDir, "old.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snippet.Public {
+		t.Fatal("expected Public to default to false for existing sidecar without field")
+	}
+}
+
+func TestUpdateSnippetPublicField(t *testing.T) {
+	base := t.TempDir()
+	v := New(&config.Config{
+		VaultPath: base,
+		FilePath:  filepath.Join(t.TempDir(), "config.toml"),
+	})
+	v.Now = func() time.Time { return time.Date(2026, 3, 14, 12, 0, 0, 0, time.UTC) }
+
+	snippet, err := v.CreateSnippet("go", "hello", []byte("package main\n"), "hello", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Update with public=true.
+	pub := true
+	if err := v.UpdateSnippet(snippet, nil, nil, &pub); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded, err := LoadSnippet(base, snippet.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !loaded.Public {
+		t.Fatal("expected Public to be true after UpdateSnippet")
+	}
+
+	// Update with nil public should not change it.
+	if err := v.UpdateSnippet(snippet, nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err = LoadSnippet(base, snippet.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !loaded.Public {
+		t.Fatal("expected Public to remain true when nil passed")
+	}
+}
+
+func TestListFilterByPublic(t *testing.T) {
+	base := t.TempDir()
+	v := New(&config.Config{
+		VaultPath: base,
+		FilePath:  filepath.Join(t.TempDir(), "config.toml"),
+	})
+	v.Now = func() time.Time { return time.Date(2026, 3, 14, 12, 0, 0, 0, time.UTC) }
+
+	s1, err := v.CreateSnippet("go", "public_one", []byte("package main\n"), "public", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s1.Public = true
+	if err := s1.SaveMeta(); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := v.CreateSnippet("go", "private_one", []byte("package main\n"), "private", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// Filter for public only.
+	pub := true
+	items, _, err := v.List(ListOptions{Public: &pub})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 || items[0].Name != "public_one" {
+		t.Fatalf("expected 1 public snippet, got %d", len(items))
+	}
+
+	// Filter for private only.
+	priv := false
+	items, _, err = v.List(ListOptions{Public: &priv})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 || items[0].Name != "private_one" {
+		t.Fatalf("expected 1 private snippet, got %d", len(items))
+	}
+
+	// No filter returns all.
+	items, _, err = v.List(ListOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("expected 2 snippets, got %d", len(items))
+	}
+}
+
 func TestNextGeneratedNameUsesTrackedCountAndSkipsExistingName(t *testing.T) {
 	base := t.TempDir()
 	v := New(&config.Config{

@@ -16,6 +16,7 @@ import (
 	"github.com/rafamoreira/trove/internal/config"
 	"github.com/rafamoreira/trove/internal/diag"
 	"github.com/rafamoreira/trove/internal/editor"
+	"github.com/rafamoreira/trove/internal/publish"
 	"github.com/rafamoreira/trove/internal/search"
 	"github.com/rafamoreira/trove/internal/vault"
 )
@@ -91,6 +92,7 @@ func NewRoot(opts Options) *cobra.Command {
 	root.AddCommand(newWatchCmd(opts))
 	root.AddCommand(newStatusCmd(opts))
 	root.AddCommand(newConfigCmd(opts))
+	root.AddCommand(newPublishCmd(opts))
 
 	return root
 }
@@ -134,6 +136,7 @@ func newNewCmd(opts Options) *cobra.Command {
 	var lang string
 	var desc string
 	var tags string
+	var public bool
 
 	cmd := &cobra.Command{
 		Use:   "new [name]",
@@ -184,6 +187,13 @@ func newNewCmd(opts Options) *cobra.Command {
 				return fmt.Errorf("snippet creation aborted: empty body")
 			}
 
+			if cmd.Flags().Changed("public") {
+				snippet.Public = public
+				if err := snippet.SaveMeta(); err != nil {
+					return err
+				}
+			}
+
 			warnings := rt.vault.CommitSnippet("add "+filepath.Base(filepath.Dir(snippet.Path))+"/"+filepath.Base(snippet.Path), relativeToVault(rt.vault.Path, snippet.Path), relativeToVault(rt.vault.Path, snippet.MetaPath))
 			return rt.emit(snippetData(snippet), warnings, renderSnippetSummary)
 		},
@@ -191,6 +201,7 @@ func newNewCmd(opts Options) *cobra.Command {
 	cmd.Flags().StringVar(&lang, "lang", "", "snippet language")
 	cmd.Flags().StringVar(&desc, "desc", "", "snippet description")
 	cmd.Flags().StringVar(&tags, "tags", "", "comma-separated tags")
+	cmd.Flags().BoolVar(&public, "public", false, "mark snippet as public")
 	return cmd
 }
 
@@ -199,6 +210,7 @@ func newAddCmd(opts Options) *cobra.Command {
 	var lang string
 	var desc string
 	var tags string
+	var public bool
 
 	cmd := &cobra.Command{
 		Use:   "add [file]",
@@ -219,6 +231,14 @@ func newAddCmd(opts Options) *cobra.Command {
 				return fmt.Errorf("--lang is required when adding from an editor buffer")
 			}
 
+			setPublic := func(snippet *vault.Snippet) error {
+				if cmd.Flags().Changed("public") {
+					snippet.Public = public
+					return snippet.SaveMeta()
+				}
+				return nil
+			}
+
 			var snippetName string
 			var language string
 			if sourceFile != "" {
@@ -236,6 +256,9 @@ func newAddCmd(opts Options) *cobra.Command {
 				}
 				snippet, err := rt.vault.CreateSnippet(language, snippetName, content, desc, splitCSV(tags))
 				if err != nil {
+					return err
+				}
+				if err := setPublic(snippet); err != nil {
 					return err
 				}
 				warnings := rt.vault.CommitSnippet("add "+filepath.Base(filepath.Dir(snippet.Path))+"/"+filepath.Base(snippet.Path), relativeToVault(rt.vault.Path, snippet.Path), relativeToVault(rt.vault.Path, snippet.MetaPath))
@@ -287,6 +310,9 @@ func newAddCmd(opts Options) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if err := setPublic(snippet); err != nil {
+				return err
+			}
 			warnings := rt.vault.CommitSnippet("add "+filepath.Base(filepath.Dir(snippet.Path))+"/"+filepath.Base(snippet.Path), relativeToVault(rt.vault.Path, snippet.Path), relativeToVault(rt.vault.Path, snippet.MetaPath))
 			return rt.emit(snippetData(snippet), warnings, renderSnippetSummary)
 		},
@@ -295,12 +321,14 @@ func newAddCmd(opts Options) *cobra.Command {
 	cmd.Flags().StringVar(&lang, "lang", "", "snippet language")
 	cmd.Flags().StringVar(&desc, "desc", "", "snippet description")
 	cmd.Flags().StringVar(&tags, "tags", "", "comma-separated tags")
+	cmd.Flags().BoolVar(&public, "public", false, "mark snippet as public")
 	return cmd
 }
 
 func newEditCmd(opts Options) *cobra.Command {
 	var desc string
 	var tags string
+	var public bool
 
 	cmd := &cobra.Command{
 		Use:   "edit <selector>",
@@ -319,9 +347,11 @@ func newEditCmd(opts Options) *cobra.Command {
 
 			descChanged := cmd.Flags().Changed("desc")
 			tagsChanged := cmd.Flags().Changed("tags")
-			if descChanged || tagsChanged {
+			publicChanged := cmd.Flags().Changed("public")
+			if descChanged || tagsChanged || publicChanged {
 				var descPtr *string
 				var tagsPtr *[]string
+				var publicPtr *bool
 				if descChanged {
 					descCopy := desc
 					descPtr = &descCopy
@@ -330,7 +360,11 @@ func newEditCmd(opts Options) *cobra.Command {
 					tagCopy := splitCSV(tags)
 					tagsPtr = &tagCopy
 				}
-				if err := rt.vault.UpdateSnippet(snippet, descPtr, tagsPtr); err != nil {
+				if publicChanged {
+					publicCopy := public
+					publicPtr = &publicCopy
+				}
+				if err := rt.vault.UpdateSnippet(snippet, descPtr, tagsPtr, publicPtr); err != nil {
 					return err
 				}
 				warnings = append(warnings, rt.vault.CommitSnippet("edit "+filepath.Base(filepath.Dir(snippet.Path))+"/"+filepath.Base(snippet.Path), relativeToVault(rt.vault.Path, snippet.MetaPath))...)
@@ -363,6 +397,7 @@ func newEditCmd(opts Options) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&desc, "desc", "", "update snippet description")
 	cmd.Flags().StringVar(&tags, "tags", "", "update snippet tags")
+	cmd.Flags().BoolVar(&public, "public", false, "mark snippet as public")
 	return cmd
 }
 
@@ -617,6 +652,41 @@ func newConfigCmd(opts Options) *cobra.Command {
 	return cmd
 }
 
+func newPublishCmd(opts Options) *cobra.Command {
+	var outputDir string
+
+	cmd := &cobra.Command{
+		Use:   "publish",
+		Short: "Generate a static website of public snippets",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			rt, err := loadRuntime(cmd, opts)
+			if err != nil {
+				return err
+			}
+
+			publicOnly := true
+			items, warnings, err := rt.vault.List(vault.ListOptions{Public: &publicOnly})
+			if err != nil {
+				return err
+			}
+
+			dir := outputDir
+			if dir == "" {
+				dir = filepath.Join(rt.vault.Path, "_site")
+			}
+
+			result, err := publish.Generate(items, dir)
+			if err != nil {
+				return err
+			}
+
+			return rt.emit(result, warnings, renderMap)
+		},
+	}
+	cmd.Flags().StringVar(&outputDir, "output", "", "output directory (default: <vault>/_site)")
+	return cmd
+}
+
 func loadRuntime(cmd *cobra.Command, opts Options) (*runtime, error) {
 	configPath, err := cmd.Flags().GetString("config")
 	if err != nil {
@@ -774,6 +844,7 @@ func snippetData(snippet *vault.Snippet) map[string]any {
 		"meta_path":   relativeToVault(filepath.Dir(filepath.Dir(snippet.Path)), snippet.MetaPath),
 		"description": snippet.Description,
 		"tags":        snippet.Tags,
+		"public":      snippet.Public,
 		"created":     created,
 	}
 }

@@ -22,6 +22,7 @@ type Vault struct {
 type ListOptions struct {
 	Language string
 	Tag      string
+	Public   *bool
 }
 
 type SearchMatch struct {
@@ -259,6 +260,9 @@ func (v *Vault) List(opts ListOptions) ([]*Snippet, []diag.Warning, error) {
 		if !HasTag(snippet.Tags, opts.Tag) {
 			return nil
 		}
+		if opts.Public != nil && snippet.Public != *opts.Public {
+			return nil
+		}
 		snippets = append(snippets, snippet)
 		return nil
 	})
@@ -325,12 +329,15 @@ func (v *Vault) Resolve(selector string) (*Snippet, []diag.Warning, error) {
 	return matches[0], warnings, nil
 }
 
-func (v *Vault) UpdateSnippet(snippet *Snippet, description *string, tags *[]string) error {
+func (v *Vault) UpdateSnippet(snippet *Snippet, description *string, tags *[]string, public *bool) error {
 	if description != nil {
 		snippet.Description = strings.TrimSpace(*description)
 	}
 	if tags != nil {
 		snippet.Tags = NormalizeTags(*tags)
+	}
+	if public != nil {
+		snippet.Public = *public
 	}
 	return snippet.SaveMeta()
 }
